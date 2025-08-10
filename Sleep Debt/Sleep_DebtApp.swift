@@ -11,13 +11,11 @@ import SwiftData
 @main
 struct Sleep_DebtApp: App {
     var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            Item.self,
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-
+        let config = ModelConfiguration(migrationPlan: SleepDebtMigrationPlan.self,
+                                        isStoredInMemoryOnly: false)
         do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
+            return try ModelContainer(for: SleepDebtSchemaV1.self,
+                                      configurations: [config])
         } catch {
             fatalError("Could not create ModelContainer: \(error)")
         }
