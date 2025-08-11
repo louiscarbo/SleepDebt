@@ -31,11 +31,8 @@ final class SessionProcessor {
             guard let lastEpisode = session.last else { continue }
 
             let sessionEndDate = lastEpisode.end
-            let sleepDayForSession = SleepDataNormalizer.getSleepDay(
-                for: sessionEndDate,
-                boundaryHour: settings.dayBoundaryHour,
-                calendar: calendar
-            )
+            // The sleep day is the calendar day on which the sleep session ends.
+            let sleepDayForSession = calendar.startOfDay(for: sessionEndDate)
             let newDayId = dayIdFormatter.string(from: sleepDayForSession)
 
             for episode in session {

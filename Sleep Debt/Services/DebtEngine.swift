@@ -45,11 +45,8 @@ final class DebtEngine {
 
             if let summary = currentDaySummary {
                 // This is a day with data, calculate cumulative debt.
-                // With delta as (actual - goal), we subtract it from debt.
-                // e.g., Debt of 60, delta of +30 (surplus) -> 60 - 30 = 30 new debt.
-                // e.g., Debt of 60, delta of -90 (deficit) -> 60 - (-90) = 150 new debt.
                 let previousDebt = previousDaySummary?.cumulativeDebtMinutes ?? 0
-                summary.cumulativeDebtMinutes = max(0, previousDebt - summary.deltaMinutes)
+                summary.cumulativeDebtMinutes = max(0, previousDebt + summary.deltaMinutes)
                 previousDaySummary = summary
             } else {
                 // This is a "No Data" day. The chain is broken.
@@ -83,11 +80,9 @@ final class DebtEngine {
         let descriptor = FetchDescriptor<DailySummary>(predicate: predicate)
         let summaries = try modelContext.fetch(descriptor)
 
-        // With delta as (actual - goal), a positive sum means surplus, negative means debt.
-        // The headline should show the debt amount (a positive number), so we negate the sum.
         let totalDelta = summaries.reduce(0) { $0 + $1.deltaMinutes }
 
-        return max(0, -totalDelta)
+        return max(0, totalDelta)
     }
 
     /// Computes the percentile-based comparison label.
@@ -120,8 +115,7 @@ final class DebtEngine {
         let totalSeconds = episodes.reduce(0) { $0 + $1.end.timeIntervalSince($1.start) }
         let actualMinutes = Int(totalSeconds / 60)
         let cappedActualMinutes = min(actualMinutes, settings.goalMinutes + 240)
-        // Note: `delta` is now (actual - goal). Positive = surplus, negative = deficit.
-        let deltaMinutes = cappedActualMinutes - settings.goalMinutes
+        let deltaMinutes = settings.goalMinutes - cappedActualMinutes
         let sourceCount = Set(episodes.map { $0.sourceBundleId }).count
 
         // Now, either update the existing summary or create a new one.
