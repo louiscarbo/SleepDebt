@@ -3,60 +3,16 @@ import SwiftData
 import Charts
 
 struct DetailsView: View {
-    @Environment(\.modelContext) private var modelContext
-    @State private var selectedTimeframe: Int = 30
-    let timeframes = [7, 14, 30, 60, 90]
+    @Environment(AppState.self) private var appState
 
     var body: some View {
         VStack {
-            Picker("Timeframe", selection: $selectedTimeframe) {
-                ForEach(timeframes, id: \.self) { days in
-                    Text("\(days) days").tag(days)
-                }
-            }
-            .pickerStyle(.segmented)
-            .padding(.horizontal)
+            DebtHistoryChartView(chartPoints: appState.chartPoints)
+                .padding()
 
-            DetailsChartView(timeframeDays: selectedTimeframe)
-
-            DailySummaryListView(timeframeDays: selectedTimeframe)
+            DailySummaryListView(timeframeDays: 14) // Fixed to 14 days
         }
         .navigationTitle("Details")
-    }
-}
-
-struct DetailsChartView: View {
-    let timeframeDays: Int
-    @Query private var summaries: [DailySummary]
-
-    init(timeframeDays: Int) {
-        self.timeframeDays = timeframeDays
-        let today = Calendar.current.startOfDay(for: .now)
-        let startDate = Calendar.current.date(byAdding: .day, value: -(timeframeDays - 1), to: today)!
-
-        let predicate = #Predicate<DailySummary> { summary in
-            summary.date >= startDate && summary.date <= today
-        }
-        self._summaries = Query(filter: predicate, sort: \.date)
-    }
-
-    var body: some View {
-        VStack {
-            if summaries.isEmpty {
-                ContentUnavailableView("No Data", systemImage: "chart.bar.xaxis")
-                    .frame(height: 200)
-            } else {
-                Chart(summaries) { summary in
-                    LineMark(
-                        x: .value("Date", summary.date, unit: .day),
-                        y: .value("Cumulative Debt", summary.cumulativeDebtMinutes)
-                    )
-                    .foregroundStyle(.blue)
-                }
-                .frame(height: 200)
-                .padding()
-            }
-        }
     }
 }
 

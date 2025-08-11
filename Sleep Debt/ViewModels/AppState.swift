@@ -96,15 +96,26 @@ final class AppState {
         let settings = try getSettings()
         self.lastSync = settings.lastSyncDate
 
-        // Chart Points (last 30 days)
-        let chartStartDate = calendar.date(byAdding: .day, value: -29, to: today)!
-        let predicate = #Predicate<DailySummary> { $0.date >= chartStartDate && $0.date <= today }
-        let descriptor = FetchDescriptor<DailySummary>(predicate: predicate, sortBy: [SortDescriptor(\.date)])
-        let summaries = try modelContext.fetch(descriptor)
-        self.chartPoints = summaries.map { ChartPoint(date: $0.date, value: $0.deltaMinutes) }
+        // Chart Points (14-day rolling debt)
+        let historyStartDate = calendar.date(byAdding: .day, value: -27, to: today)! // Need 14 days of chart + 13 days of history
+        let historyPredicate = #Predicate<DailySummary> { $0.date >= historyStartDate && $0.date <= today }
+        let historySummaries = try modelContext.fetch(FetchDescriptor(predicate: historyPredicate))
+        let deltaByDay = Dictionary(uniqueKeysWithValues: historySummaries.map { (calendar.startOfDay(for: $0.date), $0.deltaMinutes) })
+
+        var newChartPoints: [ChartPoint] = []
+        for i in 0..<14 {
+            let chartDate = calendar.date(byAdding: .day, value: -(13 - i), to: today)!
+            var rollingDebt = 0
+            for j in 0..<14 {
+                let historyDate = calendar.date(byAdding: .day, value: -j, to: chartDate)!
+                rollingDebt += deltaByDay[historyDate] ?? 0
+            }
+            newChartPoints.append(ChartPoint(date: chartDate, value: max(0, rollingDebt)))
+        }
+        self.chartPoints = newChartPoints
 
         // Today Summary Pill
-        if let todaySummaryData = summaries.last(where: { calendar.isDate($0.date, inSameDayAs: today) }) {
+        if let todaySummaryData = historySummaries.last(where: { calendar.isDate($0.date, inSameDayAs: today) }) {
             let actualHours = todaySummaryData.actualMinutes / 60
             let actualRemainderMinutes = todaySummaryData.actualMinutes % 60
             let goalHours = settings.goalMinutes / 60

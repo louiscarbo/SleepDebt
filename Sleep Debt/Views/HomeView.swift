@@ -9,7 +9,7 @@ struct HomeView: View {
             VStack(spacing: 20) {
                 header
 
-                DebtChartView(chartPoints: appState.chartPoints)
+                DebtHistoryChartView(chartPoints: appState.chartPoints)
                     .padding(.horizontal)
 
                 todayPill
@@ -101,38 +101,5 @@ struct HomeView: View {
     }
 }
 
-struct DebtChartView: View {
-    let chartPoints: [ChartPoint]
-
-    var body: some View {
-        Chart(chartPoints, id: \.date) { point in
-            BarMark(
-                x: .value("Date", point.date),
-                y: .value("Value", point.value)
-            )
-            .foregroundStyle(.blue)
-        }
-        .chartYAxis {
-            AxisMarks(position: .leading) { value in
-                AxisGridLine()
-                AxisTick()
-                AxisValueLabel {
-                    let totalMinutes = value.as(Int.self) ?? 0
-                    let hours = totalMinutes / 60
-                    let minutes = abs(totalMinutes % 60)
-                    Text("\(hours)h \(minutes)m")
-                }
-            }
-        }
-        .chartYAxisLabel("Daily Surplus / Deficit")
-        .frame(height: 200)
-    }
-}
-
-// Add a placeholder for ChartPoint if it's not globally defined
-// and accessible here. Assuming it's in DebtEngine.swift and accessible.
-struct ChartPoint: Identifiable {
-    let id = UUID()
-    let date: Date
-    let value: Int
-}
+// The DebtChartView and ChartPoint structs have been moved to DebtHistoryChartView.swift
+// to create a reusable component.
