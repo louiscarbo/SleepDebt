@@ -100,42 +100,48 @@ final class DebtEngine {
         let predicate = #Predicate<SleepEpisode> { $0.anchoredDayId == dayId }
         let episodes = try modelContext.fetch(FetchDescriptor(predicate: predicate))
 
+        // First, fetch the existing summary for the day.
         let existingSummary = try fetchSummary(for: dayId)
 
+        // If there are no episodes, any existing summary should be deleted.
         if episodes.isEmpty {
-            // No data for this day. If a summary exists, delete it.
-            if let summary = existingSummary {
-                modelContext.delete(summary)
+            if let summaryToDelete = existingSummary {
+                modelContext.delete(summaryToDelete)
             }
             return nil
         }
 
-        // Convert SleepEpisodes to SleepIntervals for merging.
-        let intervals = episodes.map { SleepInterval(uuid: $0.uuid, start: $0.start, end: $0.end, sourceBundleId: $0.sourceBundleId) }
-
-        // Merge and calculate total minutes.
-        let mergedIntervals = SleepDataNormalizer.mergeAndCoalesce(intervals: intervals)
-        let totalSeconds = mergedIntervals.reduce(0) { $0 + $1.end.timeIntervalSince($1.start) }
+        // We have episodes, so we need a summary. Calculate its values.
+        let totalSeconds = episodes.reduce(0) { $0 + $1.end.timeIntervalSince($1.start) }
         let actualMinutes = Int(totalSeconds / 60)
-
-        // Defensive cap from spec: cap actual at ideal + 4h
         let cappedActualMinutes = min(actualMinutes, settings.goalMinutes + 240)
-
         let deltaMinutes = settings.goalMinutes - cappedActualMinutes
+        let sourceCount = Set(episodes.map { $0.sourceBundleId }).count
 
-        let summary = existingSummary ?? DailySummary(dayId: dayId, date: date, hasData: true, actualMinutes: 0, deltaMinutes: 0, cumulativeDebtMinutes: 0, dataQuality: .complete, sourceCount: 0)
-
-        summary.hasData = true
-        summary.actualMinutes = cappedActualMinutes
-        summary.deltaMinutes = deltaMinutes
-        summary.sourceCount = Set(episodes.map { $0.sourceBundleId }).count
-        summary.updatedAt = .now
-
-        if existingSummary == nil {
-            modelContext.insert(summary)
+        // Now, either update the existing summary or create a new one.
+        if let summary = existingSummary {
+            // Update existing summary
+            summary.hasData = true
+            summary.actualMinutes = cappedActualMinutes
+            summary.deltaMinutes = deltaMinutes
+            summary.sourceCount = sourceCount
+            summary.updatedAt = .now
+            return summary
+        } else {
+            // Create new summary
+            let newSummary = DailySummary(
+                dayId: dayId,
+                date: date,
+                hasData: true,
+                actualMinutes: cappedActualMinutes,
+                deltaMinutes: deltaMinutes,
+                cumulativeDebtMinutes: 0, // This will be calculated in the rebuild chain
+                dataQuality: .complete,   // Placeholder
+                sourceCount: sourceCount
+            )
+            modelContext.insert(newSummary)
+            return newSummary
         }
-
-        return summary
     }
 
     private func fetchSummaries(from startDate: Date, to endDate: Date) throws -> [String: DailySummary] {
