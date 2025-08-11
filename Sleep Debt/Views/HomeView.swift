@@ -116,12 +116,12 @@ struct DebtChartView: View {
             AxisMarks(position: .leading) { value in
                 AxisGridLine()
                 AxisTick()
-                AxisValueLabel(format: {
+                AxisValueLabel {
                     let totalMinutes = value.as(Int.self) ?? 0
                     let hours = totalMinutes / 60
                     let minutes = abs(totalMinutes % 60)
-                    return "\(hours)h \(minutes)m"
-                })
+                    Text("\(hours)h \(minutes)m")
+                }
             }
         }
         .chartYAxisLabel("Daily Surplus / Deficit")
