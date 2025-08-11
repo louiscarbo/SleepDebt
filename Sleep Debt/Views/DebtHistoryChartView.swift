@@ -73,9 +73,11 @@ struct DebtHistoryChartView: View {
                                 self.selectedPointLocation = value.location
                                 if let date = proxy.value(atX: value.location.x, as: Date.self) {
                                     let calendar = Calendar.current
-                                    let closestPoint = chartPoints.min {
-                                        abs(calendar.dateComponents([.day], from: $0.date, to: date).day ?? Int.max)
-                                    }
+                                    let closestPoint = chartPoints.min(by: { a, b in
+                                        let aDist = abs(calendar.dateComponents([.day], from: a.date, to: date).day ?? Int.max)
+                                        let bDist = abs(calendar.dateComponents([.day], from: b.date, to: date).day ?? Int.max)
+                                        return aDist < bDist
+                                    })
                                     self.selectedPoint = closestPoint
                                 }
                             }
