@@ -6,5 +6,7 @@
 	<array>
 		<string>remote-notification</string>
 	</array>
+    <key>NSHealthShareUsageDescription</key>
+    <string>Read sleep data.</string>
 </dict>
 </plist>
