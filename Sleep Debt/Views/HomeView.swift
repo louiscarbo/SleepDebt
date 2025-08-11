@@ -123,6 +123,7 @@ struct DebtChartView: View {
         .chartYAxis {
             AxisMarks(position: .leading)
         }
+        .chartYAxisLabel("Cumulative Debt (minutes)")
         .frame(height: 200)
     }
 }

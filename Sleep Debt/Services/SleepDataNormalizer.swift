@@ -16,21 +16,10 @@ struct AnchoredIntervalSegment {
 // MARK: - Normalization Pipeline
 final class SleepDataNormalizer {
 
-    // MARK: 1. Process HealthKit Samples
-    /// Filters for "asleep" samples, then splits them by the day boundary.
-    static func process(
-        samples: [HKCategorySample],
-        boundaryHour: Int,
-        timeZone: TimeZone
-    ) -> [AnchoredIntervalSegment] {
-        let asleepSamples = filterAsleep(samples: samples)
-        return splitByBoundary(samples: asleepSamples, boundaryHour: boundaryHour, timeZone: timeZone)
-    }
-
-    // MARK: - Private Pipeline Steps
+    // MARK: - Public Helpers
 
     /// Filters HKCategorySamples to include only "asleep" types.
-    private static func filterAsleep(samples: [HKCategorySample]) -> [HKCategorySample] {
+    static func filterAsleep(samples: [HKCategorySample]) -> [HKCategorySample] {
         let acceptedValues: Set<HKCategoryValueSleepAnalysis> = [
             .asleepCore, .asleepDeep, .asleepREM, .asleepUnspecified
         ]
@@ -43,49 +32,35 @@ final class SleepDataNormalizer {
         }
     }
 
-    /// Splits intervals by the day boundary and assigns each segment to a sleep day.
-    private static func splitByBoundary(
-        samples: [HKCategorySample],
-        boundaryHour: Int,
-        timeZone: TimeZone
-    ) -> [AnchoredIntervalSegment] {
-        var segments: [AnchoredIntervalSegment] = []
-        let dayIdFormatter = ISO8601DateFormatter()
-        dayIdFormatter.formatOptions = [.withFullDate]
+    /// Groups sleep episodes into sessions based on a time gap threshold.
+    static func groupIntoSessions(episodes: [SleepEpisode], gapThreshold: TimeInterval = 3600) -> [[SleepEpisode]] {
+        guard !episodes.isEmpty else { return [] }
 
-        for sample in samples {
-            var calendar = Calendar.current
-            calendar.timeZone = timeZone
+        let sortedEpisodes = episodes.sorted { $0.start < $1.start }
 
-            var currentStart = sample.startDate
+        var sessions: [[SleepEpisode]] = []
+        var currentSession: [SleepEpisode] = [sortedEpisodes.first!]
 
-            while currentStart < sample.endDate {
-                let nextBoundary = getNextBoundary(for: currentStart, boundaryHour: boundaryHour, calendar: calendar)
-                let segmentEnd = min(sample.endDate, nextBoundary)
+        for i in 1..<sortedEpisodes.count {
+            let prevEpisode = currentSession.last!
+            let currentEpisode = sortedEpisodes[i]
 
-                // Determine which sleep day this segment belongs to based on its END time.
-                let sleepDayForSegment = getSleepDay(for: segmentEnd, boundaryHour: boundaryHour, calendar: calendar)
-                let dayId = dayIdFormatter.string(from: sleepDayForSegment)
-
-                let segment = AnchoredIntervalSegment(
-                    uuid: sample.uuid,
-                    dayId: dayId,
-                    start: currentStart,
-                    end: segmentEnd,
-                    sourceBundleId: sample.sourceRevision.source.bundleIdentifier
-                )
-                segments.append(segment)
-
-                currentStart = segmentEnd
+            let gap = currentEpisode.start.timeIntervalSince(prevEpisode.end)
+            if gap < gapThreshold {
+                currentSession.append(currentEpisode)
+            } else {
+                sessions.append(currentSession)
+                currentSession = [currentEpisode]
             }
         }
-
-        return segments
+        sessions.append(currentSession)
+        return sessions
     }
+
 
     // MARK: - Date Helpers
 
-    private static func getSleepDay(for date: Date, boundaryHour: Int, calendar: Calendar) -> Date {
+    static func getSleepDay(for date: Date, boundaryHour: Int, calendar: Calendar) -> Date {
         let startOfCalendarDay = calendar.startOfDay(for: date)
         guard let boundaryTime = calendar.date(bySettingHour: boundaryHour, minute: 0, second: 0, of: date) else {
             return startOfCalendarDay
@@ -98,7 +73,7 @@ final class SleepDataNormalizer {
         }
     }
 
-    private static func getNextBoundary(for date: Date, boundaryHour: Int, calendar: Calendar) -> Date {
+    static func getNextBoundary(for date: Date, boundaryHour: Int, calendar: Calendar) -> Date {
         let startOfCalendarDay = calendar.startOfDay(for: date)
         guard let boundaryOnThisDay = calendar.date(bySettingHour: boundaryHour, minute: 0, second: 0, of: date) else {
             return calendar.date(byAdding: .day, value: 1, to: startOfCalendarDay)!

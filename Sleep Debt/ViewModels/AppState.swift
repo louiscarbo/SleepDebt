@@ -44,12 +44,22 @@ final class AppState {
 
     func refresh() async {
         do {
-            let dirtyDayIds = try await syncHealthKitData()
+            let settings = try getSettings()
 
-            if !dirtyDayIds.isEmpty {
-                try debtEngine.rebuildChain(from: dirtyDayIds)
+            // 1. Sync raw data from HealthKit
+            let syncInterval = try await syncHealthKitData(settings: settings)
+
+            // 2. Process sessions and re-aggregate debt if needed
+            if let interval = syncInterval {
+                let sessionProcessor = SessionProcessor(modelContext: modelContext)
+                let dirtyDayIds = try sessionProcessor.process(dateRange: interval, settings: settings)
+
+                if !dirtyDayIds.isEmpty {
+                    try debtEngine.rebuildChain(from: dirtyDayIds)
+                }
             }
 
+            // 3. Update all published properties for the UI
             try await updatePublishedProperties()
             print("Sync, aggregation, and UI update complete.")
 
@@ -133,32 +143,49 @@ final class AppState {
 
     // MARK: - HealthKit Sync & Persistence
 
-    private func syncHealthKitData() async throws -> Set<String> {
-        let settings = try getSettings()
+    private func syncHealthKitData(settings: UserSettings) async throws -> DateInterval? {
         let lastAnchorData = settings.hkQueryAnchorData
         let anchor: HKQueryAnchor? = lastAnchorData.flatMap { try? NSKeyedUnarchiver.unarchivedObject(ofClass: HKQueryAnchor.self, from: $0) }
 
         let fetchResult = try await healthStoreManager.runAnchoredFetch(anchor: anchor)
-        var dirtyDayIds = Set<String>()
+        var changedDates: [Date] = []
 
         if !fetchResult.deleted.isEmpty {
             let deletedUUIDs = fetchResult.deleted.map { $0.uuid }
             let predicate = #Predicate<SleepEpisode> { deletedUUIDs.contains($0.uuid) }
             let episodesToDelete = try modelContext.fetch(FetchDescriptor(predicate: predicate))
+
             for episode in episodesToDelete {
-                dirtyDayIds.insert(episode.anchoredDayId)
+                changedDates.append(episode.start)
                 modelContext.delete(episode)
             }
         }
 
         if !fetchResult.added.isEmpty {
-            let segments = SleepDataNormalizer.process(samples: fetchResult.added, boundaryHour: settings.dayBoundaryHour, timeZone: .current)
-            for segment in segments {
-                let newEpisode = SleepEpisode(uuid: segment.uuid, start: segment.start, end: segment.end, sourceBundleId: segment.sourceBundleId, anchoredDayId: segment.dayId)
-                // Using an upsert-like pattern
+            let asleepSamples = SleepDataNormalizer.filterAsleep(samples: fetchResult.added)
+            let dayIdFormatter = ISO8601DateFormatter()
+            dayIdFormatter.formatOptions = [.withFullDate]
+
+            for sample in asleepSamples {
+                // Use a temporary day ID based on start time; this will be corrected by the SessionProcessor.
+                let tempSleepDay = SleepDataNormalizer.getSleepDay(for: sample.startDate, boundaryHour: settings.dayBoundaryHour, calendar: calendar)
+                let tempDayId = dayIdFormatter.string(from: tempSleepDay)
+
+                let newEpisode = SleepEpisode(
+                    uuid: sample.uuid,
+                    start: sample.startDate,
+                    end: sample.endDate,
+                    sourceBundleId: sample.sourceRevision.source.bundleIdentifier,
+                    anchoredDayId: tempDayId
+                )
                 modelContext.insert(newEpisode)
-                dirtyDayIds.insert(segment.dayId)
+                changedDates.append(sample.startDate)
+                changedDates.append(sample.endDate)
             }
+        }
+
+        guard !changedDates.isEmpty else {
+            return nil // No changes
         }
 
         let newAnchorData = try NSKeyedArchiver.archivedData(withRootObject: fetchResult.newAnchor, requiringSecureCoding: true)
@@ -169,6 +196,13 @@ final class AppState {
             try modelContext.save()
         }
 
-        return dirtyDayIds
+        // Return a date interval covering all changes
+        let minDate = changedDates.min()!
+        let maxDate = changedDates.max()!
+        // Add a buffer to the date range to catch sessions that might be just outside
+        let startDate = calendar.date(byAdding: .day, value: -1, to: minDate)!
+        let endDate = calendar.date(byAdding: .day, value: 1, to: maxDate)!
+
+        return DateInterval(start: startDate, end: endDate)
     }
 }
