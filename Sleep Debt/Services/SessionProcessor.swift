@@ -58,8 +58,12 @@ final class SessionProcessor {
     }
 
     private func fetchEpisodes(in dateRange: DateInterval) throws -> [SleepEpisode] {
+        let start = dateRange.start
+        let end = dateRange.end
+        // We want to fetch all episodes that overlap with the given date range.
+        // The condition for two intervals [A, B] and [C, D] to overlap is A < D and C < B.
         let predicate = #Predicate<SleepEpisode> { episode in
-            dateRange.contains(episode.start) || dateRange.contains(episode.end)
+            episode.start < end && episode.end > start
         }
         let descriptor = FetchDescriptor(predicate: predicate, sortBy: [SortDescriptor(\.start)])
         return try modelContext.fetch(descriptor)
