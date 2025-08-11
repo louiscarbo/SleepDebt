@@ -30,9 +30,15 @@ final class AppState {
     // MARK: - Public API
 
     func initialLoad() async {
-        await refresh()
-        if let settings = try? getSettings() {
-            userGoalMinutes = settings.goalMinutes
+        do {
+            try await healthStoreManager.requestAuthorization()
+            await refresh()
+            if let settings = try? getSettings() {
+                userGoalMinutes = settings.goalMinutes
+            }
+        } catch {
+            print("HealthKit authorization failed: \(error)")
+            // In a real app, we would set an error state here to show in the UI.
         }
     }
 
