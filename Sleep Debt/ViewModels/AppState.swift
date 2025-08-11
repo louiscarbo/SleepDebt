@@ -152,8 +152,7 @@ final class AppState {
         }
 
         if !fetchResult.added.isEmpty {
-            let sleepIntervals = SleepDataNormalizer.filterAsleep(samples: fetchResult.added)
-            let segments = SleepDataNormalizer.splitByBoundary(intervals: sleepIntervals, boundaryHour: settings.dayBoundaryHour, timeZone: .current)
+            let segments = SleepDataNormalizer.process(samples: fetchResult.added, boundaryHour: settings.dayBoundaryHour, timeZone: .current)
             for segment in segments {
                 let newEpisode = SleepEpisode(uuid: segment.uuid, start: segment.start, end: segment.end, sourceBundleId: segment.sourceBundleId, anchoredDayId: segment.dayId)
                 // Using an upsert-like pattern
