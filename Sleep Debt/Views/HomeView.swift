@@ -106,19 +106,11 @@ struct DebtChartView: View {
 
     var body: some View {
         Chart(chartPoints, id: \.date) { point in
-            LineMark(
+            BarMark(
                 x: .value("Date", point.date),
                 y: .value("Debt", point.debtMinutes)
             )
             .foregroundStyle(.blue)
-
-            // Add a point mark for better visibility on tap
-            PointMark(
-                x: .value("Date", point.date),
-                y: .value("Debt", point.debtMinutes)
-            )
-            .foregroundStyle(.blue)
-            .symbolSize(100)
         }
         .chartYAxis {
             AxisMarks(position: .leading)
