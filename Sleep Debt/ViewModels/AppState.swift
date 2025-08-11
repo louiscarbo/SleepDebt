@@ -101,7 +101,7 @@ final class AppState {
         let predicate = #Predicate<DailySummary> { $0.date >= chartStartDate && $0.date <= today }
         let descriptor = FetchDescriptor<DailySummary>(predicate: predicate, sortBy: [SortDescriptor(\.date)])
         let summaries = try modelContext.fetch(descriptor)
-        self.chartPoints = summaries.map { ChartPoint(date: $0.date, debtMinutes: $0.cumulativeDebtMinutes) }
+        self.chartPoints = summaries.map { ChartPoint(date: $0.date, value: $0.deltaMinutes) }
 
         // Today Summary Pill
         if let todaySummaryData = summaries.last(where: { calendar.isDate($0.date, inSameDayAs: today) }) {

@@ -108,14 +108,23 @@ struct DebtChartView: View {
         Chart(chartPoints, id: \.date) { point in
             BarMark(
                 x: .value("Date", point.date),
-                y: .value("Debt", point.debtMinutes)
+                y: .value("Value", point.value)
             )
             .foregroundStyle(.blue)
         }
         .chartYAxis {
-            AxisMarks(position: .leading)
+            AxisMarks(position: .leading) { value in
+                AxisGridLine()
+                AxisTick()
+                AxisValueLabel(format: {
+                    let totalMinutes = value.as(Int.self) ?? 0
+                    let hours = totalMinutes / 60
+                    let minutes = abs(totalMinutes % 60)
+                    return "\(hours)h \(minutes)m"
+                })
+            }
         }
-        .chartYAxisLabel("Cumulative Debt (minutes)")
+        .chartYAxisLabel("Daily Surplus / Deficit")
         .frame(height: 200)
     }
 }
@@ -125,5 +134,5 @@ struct DebtChartView: View {
 struct ChartPoint: Identifiable {
     let id = UUID()
     let date: Date
-    let debtMinutes: Int
+    let value: Int
 }
