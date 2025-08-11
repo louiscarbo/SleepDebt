@@ -32,9 +32,29 @@ import SwiftData
 
 struct NotificationPrefs: Codable, Hashable {
     var dailySummaryEnabled: Bool = true
-    var dailyPreferredTime: DateComponents? = DateComponents(hour: 8, minute: 0)
+    var dailyPreferredHour: Int?
+    var dailyPreferredMinute: Int?
     var thresholdAlertsEnabled: Bool = false
     var thresholdsMinutes: [Int] = [120, 300, 480] // 2h, 5h, 8h
+
+    var dailyPreferredTime: DateComponents? {
+        get {
+            guard let hour = dailyPreferredHour, let minute = dailyPreferredMinute else { return nil }
+            return DateComponents(hour: hour, minute: minute)
+        }
+        set {
+            dailyPreferredHour = newValue?.hour
+            dailyPreferredMinute = newValue?.minute
+        }
+    }
+
+    // Custom init to set the default time
+    init() {
+        self.dailySummaryEnabled = true
+        self.thresholdAlertsEnabled = false
+        self.thresholdsMinutes = [120, 300, 480]
+        self.dailyPreferredTime = DateComponents(hour: 8, minute: 0)
+    }
 }
 
 // MARK: - Per-day summary (post-merge)
